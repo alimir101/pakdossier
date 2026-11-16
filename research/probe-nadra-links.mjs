@@ -1,0 +1,10 @@
+import dns from 'node:dns';
+dns.setServers(['8.8.8.8', '1.1.1.1']);
+const r = await fetch('https://www.nadra.gov.pk/', { headers: { 'user-agent': 'Mozilla/5.0 Chrome/126' } });
+const h = await r.text();
+console.log('status', r.status, 'len', h.length);
+const all = [...new Set([...h.matchAll(/href=["']([^"']+)["']/gi)].map(m => m[1]))];
+console.log('total hrefs', all.length);
+console.log(all.filter(l => /verif|api|data|grid|rti|consent|ijazat|family|pakid|track/i.test(l)).join('\n'));
+console.log('--- sample');
+console.log(all.slice(0, 40).join('\n'));

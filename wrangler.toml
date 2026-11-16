@@ -1,0 +1,28 @@
+# Cloudflare Worker deployment (optional — the app works without it).
+#
+# The same handleRequest also runs behind `npm run dev` / `npm run preview`,
+# so you can develop with zero Cloudflare account.
+#
+# Deploy:
+#   npx wrangler deploy
+#   npx wrangler secret put IPQS_KEY        # or any subset of the 5 free keys
+#   npx wrangler kv namespace create CACHE  # then paste the id below
+#
+# Only set the keys you actually signed up for. None are required.
+
+name = "pakdossier-api"
+main = "src/worker/index.ts"
+compatibility_date = "2026-11-16"
+
+[vars]
+LOOKUP_TIMEOUT_MS = "9000"
+CACHE_TTL_SECONDS = "604800"
+# ALLOWED_ORIGIN = "https://your.pages.dev"
+# DISABLE_KEYLESS = "1"
+
+# [[kv_namespaces]]
+# binding = "CACHE"
+# id = "<paste from: wrangler kv namespace create CACHE>"
+
+[observability]
+enabled = true

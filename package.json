@@ -1,0 +1,41 @@
+{
+  "name": "pakdossier",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Free OSINT dossier PWA for Pakistani mobile numbers (offline-first).",
+  "scripts": {
+    "dev": "vite",
+    "dev:obscura": ".tools\\obscura\\obscura.exe serve --port 9222 --stealth",
+    "dev:sidecar": "node tools/pakdb-sidecar.mjs",
+    "setup:obscura": "node scripts/setup-obscura.mjs",
+    "build": "tsc --noEmit && vite build",
+    "build:server": "vite build --ssr src/worker/index.ts --outDir dist-server",
+    "build:all": "npm run build && npm run build:server",
+    "start": "node server/app.mjs",
+    "preview": "vite preview",
+    "test": "vitest run tests/unit",
+    "test:all": "vitest run",
+    "test:live": "vitest run tests/live",
+    "verify:browser": "node scripts/verify-browser.mjs",
+    "doctor": "node scripts/doctor.mjs",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.6",
+    "@types/node": "^26.6.6",
+    "preact-render-to-string": "^6.8.3",
+    "puppeteer-core": "^25.17.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.0"
+  },
+  "dependencies": {
+    "libphonenumber-js": "^1.13.16",
+    "preact": "^11.2.0"
+  }
+}

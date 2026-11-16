@@ -1,0 +1,36 @@
+# Sidecar-only image: Obscura + the PakDossier sidecar.
+#
+#   docker build -f Dockerfile.sidecar -t pakdossier-sidecar .
+#   docker run -p 8788:8788 --shm-size=512m pakdossier-sidecar
+#
+# The app and the worker do NOT need this image — only the owner-name feature does.
+FROM node:24-bookworm-slim
+
+ARG OBSCURA_VERSION=v0.2.7
+ENV NODE_ENV=production \
+    PAKDB_SIDECAR_PORT=8788 \
+    OBSCURA_HTTP=http://127.0.0.1:9222 \
+    PAKDB_BROWSER_URL=http://127.0.0.1:8788
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends curl ca-certificates xz-utils \
+ && curl -fsSL -o /tmp/obscura.tar.gz \
+      "https://github.com/h4ckf0r0day/obscura/releases/download/${OBSCURA_VERSION}/obscura-x86_64-linux-stealth.tar.gz" \
+ && mkdir -p /opt/obscura && tar xzf /tmp/obscura.tar.gz -C /opt/obscura \
+ && rm /tmp/obscura.tar.gz \
+ && apt-get purge -y xz-utils && apt-get autoremove -y \
+ && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+# only the runtime bits the sidecar needs
+RUN npm ci --omit=dev && npm install --no-save puppeteer-core
+
+COPY tools ./tools
+
+EXPOSE 8788
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PAKDB_SIDECAR_PORT)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
+# obscura first, then the sidecar (which warms itself up on boot)
+CMD ["sh", "-c", "/opt/obscura/obscura serve --port 9222 --stealth & sleep 3; exec node tools/pakdb-sidecar.mjs"]

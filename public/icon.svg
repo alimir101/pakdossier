@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="PakDossier">
+  <rect width="512" height="512" rx="96" fill="#0b5fa5" />
+  <path d="M150 128h140c66 0 110 40 110 100s-44 100-110 100h-56v74h-84V128zm84 68v64h50c20 0 32-12 32-32s-12-32-32-32h-50z" fill="#ffffff" />
+  <circle cx="382" cy="382" r="42" fill="#7dd3fc" />
+</svg>

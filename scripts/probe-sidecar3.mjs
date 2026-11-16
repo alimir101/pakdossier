@@ -1,0 +1,10 @@
+const base = 'http://127.0.0.1:8788';
+const t1 = Date.now();
+const r1 = await fetch(base + '/pakdb?number=03331234567', { signal: AbortSignal.timeout(120000) });
+const j1 = await r1.json();
+const limited = j1.html && /TOO MANY SEARCHES/i.test(j1.html);
+console.log(`request1 status=${r1.status} ok=${j1.ok} cached=${!!j1.cached} ms=${Date.now()-t1}`);
+if (limited) console.log('  ', /TOO MANY SEARCHES[^.]*/.exec(j1.html)[0]);
+const t2 = Date.now();
+const j2 = await (await fetch(base + '/pakdb?number=03331234567', { signal: AbortSignal.timeout(60000) })).json();
+console.log(`request2 cached=${!!j2.cached} ms=${Date.now()-t2}  (limited page cache se aani chahiye)`);

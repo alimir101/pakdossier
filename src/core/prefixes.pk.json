@@ -1,0 +1,124 @@
+{
+  "country": "PK",
+  "callingCode": "92",
+  "verifiedOn": "2026-11-16",
+  "mobileNationalLength": 11,
+  "mobileSignificantLength": 10,
+  "mobileTrunkPrefix": "0",
+  "note": "Prefix = ORIGINAL allocated network. Mobile Number Portability (MNP) exists in Pakistan since 2007, so the live network can differ. Live network is only available officially via SMS 'N 03XXXXXXXXX' to 76367.",
+  "sourceIndex": {
+    "wiki-telecom-pk": "https://en.wikipedia.org/wiki/List_of_telecommunication_companies_in_Pakistan",
+    "whichnetworkcode": "https://whichnetworkcode.com/",
+    "pakbiz-codes": "https://pakbiz.com/blog/0327-which-network-code-in-pakistan/",
+    "github-list": "https://github.com/hack0x90/list-of-all-pakistan-mobile-numbers",
+    "pta-76367": "https://checksimownerdetails.pk/sim-details-by-number/"
+  },
+  "ranges": [
+    {
+      "start": "0300",
+      "end": "0309",
+      "operator": "Jazz",
+      "brand": "Jazz (PMCL)",
+      "mnc": "410-01",
+      "allocation": "current",
+      "confidence": "high",
+      "note": "Formerly Mobilink; Warid merge ke baad Jazz.",
+      "sources": ["wiki-telecom-pk", "pakbiz-codes", "github-list"]
+    },
+    {
+      "start": "0311",
+      "end": "0318",
+      "operator": "Zong",
+      "brand": "Zong (CMPak)",
+      "mnc": "410-04",
+      "allocation": "current",
+      "confidence": "high",
+      "sources": ["whichnetworkcode", "github-list"]
+    },
+    {
+      "start": "0319",
+      "end": "0319",
+      "operator": "Zong",
+      "brand": "Zong (CMPak)",
+      "mnc": "410-04",
+      "allocation": "current",
+      "confidence": "medium",
+      "note": "Kuch sources 031x ko poora Zong kehte hain; 0319 ki tasdeeq kamzor hai.",
+      "sources": ["wiki-telecom-pk"]
+    },
+    {
+      "start": "0320",
+      "end": "0329",
+      "operator": "Jazz",
+      "brand": "Jazz (PMCL) — legacy Warid range",
+      "mnc": "410-07",
+      "allocation": "merged",
+      "confidence": "medium",
+      "note": "Warid ka range, 2016 mein Jazz (Mobilink) mein merge.",
+      "sources": ["wiki-telecom-pk", "github-list"]
+    },
+    {
+      "start": "0330",
+      "end": "0338",
+      "operator": "Ufone",
+      "brand": "Ufone (PTML)",
+      "mnc": "410-03",
+      "allocation": "current",
+      "confidence": "high",
+      "sources": ["wiki-telecom-pk", "github-list"]
+    },
+    {
+      "start": "0339",
+      "end": "0339",
+      "operator": "Onic",
+      "brand": "Onic (Ufone ki MVNO)",
+      "mnc": "410-03",
+      "allocation": "mvno",
+      "confidence": "high",
+      "note": "Onic Ufone ka digital MVNO hai.",
+      "sources": ["wiki-telecom-pk", "whichnetworkcode"]
+    },
+    {
+      "start": "0340",
+      "end": "0349",
+      "operator": "Ufone",
+      "brand": "Telenor range — ab Ufone (PTCL merge)",
+      "mnc": "410-06",
+      "allocation": "merged",
+      "confidence": "medium",
+      "note": "034x Telenor ka tha; Telenor Pakistan PTCL/Ufone mein merge ho gaya. Purani listings abhi bhi 034x ko Telenor likhti hain.",
+      "sources": ["wiki-telecom-pk", "pakbiz-codes"]
+    },
+    {
+      "start": "0350",
+      "end": "0355",
+      "operator": "SCOM",
+      "brand": "SCOM (SCO)",
+      "mnc": "410-05",
+      "allocation": "regional",
+      "confidence": "low",
+      "regionNote": "Sirf Azad Kashmir aur Gilgit-Baltistan.",
+      "note": "Wikipedia sirf 0355x deta hai; kuch sites 0350–0355 dete hain. Is liye confidence low.",
+      "sources": ["whichnetworkcode", "wiki-telecom-pk"]
+    },
+    {
+      "start": "0370",
+      "end": "0371",
+      "operator": "Zong",
+      "brand": "Zong (CMPak)",
+      "mnc": "410-04",
+      "allocation": "current",
+      "confidence": "high",
+      "sources": ["wiki-telecom-pk"]
+    }
+  ],
+  "unallocated": {
+    "ranges": [
+      { "start": "0310", "end": "0310" },
+      { "start": "0356", "end": "0369" },
+      { "start": "0372", "end": "0399" }
+    ],
+    "confidence": "low",
+    "note": "Allocated range nahi mili. Naya allocation, leakage, ya ghalat prefix ho sakta hai. Official record ke liye 76367."
+  }
+}

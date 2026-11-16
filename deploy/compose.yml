@@ -1,0 +1,80 @@
+# PakDossier / Investigator-OS — homelab stack
+#
+#   docker compose -f deploy/compose.yml --env-file deploy/.env up -d --build
+#
+# Three services, all on the homelab. Only `app` is public, and only through the
+# existing Traefik + cloudflared (wildcard *.liflix.online already lands on Traefik).
+# Nothing already running is touched: separate project, separate networks, no host ports.
+
+name: os
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.app
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      PAKDB_BROWSER_URL: http://sidecar:8788
+      # a real browser is slow: keep this >= the adapter floor
+      LOOKUP_TIMEOUT_MS: "90000"
+      CACHE_TTL_SECONDS: "604800"
+      ALLOWED_ORIGIN: "${PUBLIC_ORIGIN:-https://os.liflix.online}"
+      # optional free keys — leave blank to skip a provider
+      IPQS_KEY: "${IPQS_KEY:-}"
+      VERIPHONE_KEY: "${VERIPHONE_KEY:-}"
+      NUMLOOKUPAPI_KEY: "${NUMLOOKUPAPI_KEY:-}"
+      ABSTRACTAPI_KEY: "${ABSTRACTAPI_KEY:-}"
+      NUMVERIFY_KEY: "${NUMVERIFY_KEY:-}"
+    volumes:
+      - /srv/cloud/os/cache:/data
+    networks: [internal, dokploy-network]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: dokploy-network
+      # http -> https, same pattern as the existing services
+      traefik.http.routers.os-intel-web.rule: Host(`${PUBLIC_HOST:-os.liflix.online}`)
+      traefik.http.routers.os-intel-web.entrypoints: web
+      traefik.http.routers.os-intel-web.middlewares: redirect-to-https@file
+      traefik.http.routers.os-intel-web.service: os-intel-svc
+      # https
+      traefik.http.routers.os-intel-websecure.rule: Host(`${PUBLIC_HOST:-os.liflix.online}`)
+      traefik.http.routers.os-intel-websecure.entrypoints: websecure
+      traefik.http.routers.os-intel-websecure.service: os-intel-svc
+      traefik.http.routers.os-intel-websecure.tls.certresolver: letsencrypt
+      traefik.http.services.os-intel-svc.loadbalancer.server.port: "8080"
+
+  # real browser for captcha-protected public portals; internal only
+  obscura:
+    image: os-obscura
+    build:
+      context: .
+      dockerfile: Dockerfile.obscura
+    restart: unless-stopped
+    # --workers 2 matters: single-process mode failed to execute page scripts
+    command: ["serve", "--port", "9222", "--stealth", "--workers", "2"]
+    shm_size: 512m
+    networks: [internal]
+
+  sidecar:
+    image: os-sidecar
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.sidecar
+    restart: unless-stopped
+    environment:
+      OBSCURA_HTTP: http://obscura:9222
+      PAKDB_SIDECAR_PORT: "8788"
+      PAKDB_ATTEMPTS: "3"
+      PAKDB_CACHE_MS: "1800000"
+    depends_on: [obscura]
+    networks: [internal]
+
+networks:
+  # our own private network (bridge, not reachable from outside)
+  internal:
+    driver: bridge
+  # Traefik's network, so the docker provider can route us
+  dokploy-network:
+    external: true

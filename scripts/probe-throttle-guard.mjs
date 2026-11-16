@@ -1,0 +1,12 @@
+const base = 'http://127.0.0.1:8788';
+const t1 = Date.now();
+const j1 = await (await fetch(base + '/pakdb?number=03009998888', { signal: AbortSignal.timeout(150000) })).json();
+console.log(`r1: ok=${j1.ok} limited=${!!j1.limited} attempts=${j1.attempts} ms=${Date.now()-t1} retryAfter=${j1.retryAfterMinutes ?? '-'}`);
+const t2 = Date.now();
+const j2 = await (await fetch(base + '/pakdb?number=03111112222', { signal: AbortSignal.timeout(60000) })).json();
+console.log(`r2: ok=${j2.ok} limited=${!!j2.limited} attempts=${j2.attempts} ms=${Date.now()-t2} retryAfter=${j2.retryAfterMinutes ?? '-'}`);
+const t3 = Date.now();
+const j3 = await (await fetch(base + '/pakdb?number=03111112222&fresh=1', { signal: AbortSignal.timeout(150000) })).json();
+console.log(`r3 (fresh=1 bypasses guard): attempts=${j3.attempts} ms=${Date.now()-t3}`);
+const h = await (await fetch(base + '/healthz')).json();
+console.log('healthz limitedMinutes=', h.limitedMinutes);

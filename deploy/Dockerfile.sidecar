@@ -1,0 +1,13 @@
+# The sidecar: the only piece that talks to the browser.
+# Reads Obscura over CDP (OBSCURA_HTTP) and serves /pakdb on 8788.
+FROM node:24-bookworm-slim
+ENV NODE_ENV=production PAKDB_SIDECAR_PORT=8788 OBSCURA_HTTP=http://obscura:9222
+WORKDIR /app
+COPY package.json package-lock.json ./
+# puppeteer-core is a devDependency but is needed at runtime here
+RUN npm ci --omit=dev && npm install --no-save puppeteer-core && npm cache clean --force
+COPY tools ./tools
+EXPOSE 8788
+HEALTHCHECK --interval=30s --timeout=6s --start-period=40s \
+  CMD node -e "fetch('http://127.0.0.1:8788/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+CMD ["node", "tools/pakdb-sidecar.mjs"]
