@@ -71,10 +71,11 @@ services:
     environment:
       OBSCURA_HTTP: http://obscura:9222
       PAKDB_SIDECAR_PORT: "8788"
-      PAKDB_ATTEMPTS: "2"
-      # whole-search budget: must finish inside Cloudflare's ~100s origin limit
-      PAKDB_BUDGET_MS: "80000"
-      PAKDB_TOKEN_WAIT_MS: "55000"
+      # one long attempt beats two short ones: the widget needs ~90s here, and the
+      # sidecar caches the result, so the *second* call is instant
+      PAKDB_ATTEMPTS: "1"
+      PAKDB_BUDGET_MS: "140000"
+      PAKDB_TOKEN_WAIT_MS: "95000"
       PAKDB_CACHE_MS: "1800000"
     depends_on: [obscura]
     networks: [internal]

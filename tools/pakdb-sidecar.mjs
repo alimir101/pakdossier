@@ -39,9 +39,9 @@ const CDP_HTTP = process.env.OBSCURA_HTTP ?? 'http://127.0.0.1:9222';
 const CDP_TOKEN = process.env.OBSCURA_CDP_TOKEN;
 const ATTEMPTS = Number(process.env.PAKDB_ATTEMPTS ?? 2);
 /** whole-search budget: Cloudflare closes the origin at ~100s, so finish earlier */
-const BUDGET_MS = Number(process.env.PAKDB_BUDGET_MS ?? 80_000);
+const BUDGET_MS = Number(process.env.PAKDB_BUDGET_MS ?? 140_000);
 /** how long to keep waiting for a widget token (this site's widget is very slow) */
-const TOKEN_WAIT_MS = Number(process.env.PAKDB_TOKEN_WAIT_MS ?? 55_000);
+const TOKEN_WAIT_MS = Number(process.env.PAKDB_TOKEN_WAIT_MS ?? 95_000);
 const CACHE_TTL_MS = Number(process.env.PAKDB_CACHE_MS ?? 30 * 60 * 1000);
 const cache = new Map();
 
@@ -328,6 +328,8 @@ async function search(query, force = false) {
     // alternate hosts across attempts so a dead host is skipped quickly
     const site = SITES[(attempt - 1) % SITES.length];
     try {
+      // a previous attempt may have dropped the page (self-heal) — reattach first
+      await ensureBrowser();
       const token = await mintToken(site);
       const html = await postSearch(site, token, n);
       if (/VERIFICATION FAILED/i.test(html)) {

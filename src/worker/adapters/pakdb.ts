@@ -25,8 +25,8 @@ export const pakdb: Adapter = {
   requiresEnv: 'PAKDB_BROWSER_URL',
   carrierKind: 'prefix',
   confidence: 'medium',
-  // a real browser, and this site's widget is slow (overrun -> interactive)
-  timeoutMsMin: 80_000,
+  // a real browser, and this site's widget needs ~90s before it gives a token
+  timeoutMsMin: 120_000,
 
   async run(input, ctx) {
     const base = (ctx.env?.PAKDB_BROWSER_URL ?? '').replace(/\/$/, '');
