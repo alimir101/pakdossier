@@ -60,7 +60,8 @@ export async function runPool(
       continue;
     }
 
-    if (await deps.counters.inCooldown(adapter.id)) {
+    // a user-requested refresh must actually try, even if we are cooling down
+    if (!deps.fresh && (await deps.counters.inCooldown(adapter.id))) {
       partial.push({ provider: adapter.id, reason: 'cooldown' });
       continue;
     }
