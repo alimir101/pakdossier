@@ -10,6 +10,8 @@ const DBG = process.env.OBSCURA_HTTP ?? 'http://127.0.0.1:9222';
 const v = await (await fetch(`${DBG}/json/version`)).json();
 const browser = await puppeteer.connect({ browserWSEndpoint: v.webSocketDebuggerUrl, protocolTimeout: 180000, defaultViewport: { width: 1280, height: 900 } });
 const page = await browser.newPage();
+// set the UA from the page side: some browser launch scripts split it on spaces
+if (process.env.UA) await page.setUserAgent(process.env.UA).catch(() => {});
 
 await page.goto(SITE, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {});
 await page.evaluate(() => {
