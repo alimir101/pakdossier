@@ -21,7 +21,9 @@ const CDP_HTTP = process.env.OBSCURA_HTTP ?? 'http://127.0.0.1:9222';
 const CDP_TOKEN = process.env.OBSCURA_CDP_TOKEN;
 const ATTEMPTS = Number(process.env.PAKDB_ATTEMPTS ?? 2);
 /** whole-search budget: Cloudflare closes the origin at ~100s, so finish earlier */
-const BUDGET_MS = Number(process.env.PAKDB_BUDGET_MS ?? 70_000);
+const BUDGET_MS = Number(process.env.PAKDB_BUDGET_MS ?? 80_000);
+/** how long to keep waiting for a widget token (this site's widget is very slow) */
+const TOKEN_WAIT_MS = Number(process.env.PAKDB_TOKEN_WAIT_MS ?? 55_000);
 const CACHE_TTL_MS = Number(process.env.PAKDB_CACHE_MS ?? 30 * 60 * 1000);
 const cache = new Map();
 
@@ -155,19 +157,45 @@ async function mintToken(site) {
       return el && typeof el.value === 'string' ? el.value : '';
     }).catch(() => '');
 
-  // two windows, with a frame poke in between: the child frame often needs help
-  for (let round = 0; round < 2; round++) {
-    const deadline = Date.now() + 12_000;
-    while (Date.now() < deadline) {
-      const tok = await readToken();
-      if (tok && tok.length > 20) return tok;
-      await new Promise((r) => setTimeout(r, 500));
+  /**
+   * Measured behaviour of this site's widget in a headless browser:
+   *   ~36s  overrunBegin        (non-interactive attempt timed out)
+   *   ~82s  interactiveEnd      (interactive attempt finished)
+   *   then it repeats. So we must (a) wait much longer than a normal widget and
+   *   (b) actually click the widget once the interactive phase starts.
+   */
+  const started = Date.now();
+  let lastClick = 0;
+  while (Date.now() - started < TOKEN_WAIT_MS) {
+    const tok = await readToken();
+    if (tok && tok.length > 20) return tok;
+
+    if (Date.now() - started > 8000 && Date.now() - lastClick > 2500) {
+      lastClick = Date.now();
+      const box = await page
+        .evaluate(() => {
+          const el = document.querySelector('.cf-turnstile, [data-sitekey]');
+          if (!el) return null;
+          const r = el.getBoundingClientRect();
+          return { x: r.x, y: r.y, w: r.width, h: r.height };
+        })
+        .catch(() => null);
+      if (box && box.w > 0) {
+        const y = box.y + (box.h > 4 ? box.h / 2 : 22);
+        for (const x of [box.x + 25, box.x + 34, box.x + box.w / 2]) {
+          await page.mouse.click(x, y).catch(() => {});
+        }
+        // the widget may live in a child frame: give that a poke too
+        await pokeWidgetFrame().catch(() => {});
+      }
     }
-    if (round === 0) await pokeWidgetFrame();
+    await new Promise((r) => setTimeout(r, 700));
   }
 
   const tok = await readToken();
-  if (!tok || tok.length <= 20) throw new Error('widget ne token nahi diya');
+  if (!tok || tok.length <= 20) {
+    throw new Error(`widget ne ${Math.round(TOKEN_WAIT_MS / 1000)}s mein token nahi diya`);
+  }
   return tok;
 }
 

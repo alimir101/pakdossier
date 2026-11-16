@@ -176,8 +176,8 @@ export async function handleRequest(
       const fresh = url.searchParams.get('fresh') === '1' ? '&fresh=1' : '';
       const r = await deps.fetch(`${base}/pakdb?query=${d}${fresh}`, {
         // stay inside Cloudflare's ~100s origin limit: the sidecar has its own
-        // 70s budget, so a slow mirror must never become an HTML 502
-        signal: AbortSignal.timeout(85_000),
+        // 80s budget, so a slow mirror must never become an HTML 502
+        signal: AbortSignal.timeout(92_000),
       });
       if (!r.ok && r.headers.get('content-type')?.includes('json') === false) {
         throw new Error(`sidecar HTTP ${r.status}`);

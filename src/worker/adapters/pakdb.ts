@@ -25,8 +25,8 @@ export const pakdb: Adapter = {
   requiresEnv: 'PAKDB_BROWSER_URL',
   carrierKind: 'prefix',
   confidence: 'medium',
-  // a real browser: cold navigation + captcha token + search. 8s is not enough.
-  timeoutMsMin: 60_000,
+  // a real browser, and this site's widget is slow (overrun -> interactive)
+  timeoutMsMin: 80_000,
 
   async run(input, ctx) {
     const base = (ctx.env?.PAKDB_BROWSER_URL ?? '').replace(/\/$/, '');
