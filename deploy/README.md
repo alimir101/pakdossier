@@ -18,8 +18,14 @@ Data `/srv/cloud/os/` par (root disk 85% bhara hai, is liye).
 ```bash
 # 1) data + env
 sudo mkdir -p /srv/cloud/os/cache
+
+# CDP token (Obscura refuses a non-loopback bind without one, min 32 bytes).
+# Read by BOTH the browser and the sidecar via env_file.
+sudo sh -c 'echo "OBSCURA_CDP_TOKEN=$(openssl rand -hex 32)" > /srv/cloud/os/obscura.env'
+sudo chmod 600 /srv/cloud/os/obscura.env
+
 cd <repo>/deploy
-cp .env.example .env          # PUBLIC_HOST tumhara subdomain; keys optional
+cp .env.example .env          # PUBLIC_HOST; optional provider keys
 
 # 2) network confirm (Traefik isi par hai)
 docker network ls | grep dokploy-network
@@ -29,7 +35,7 @@ docker compose -f compose.yml --env-file .env up -d --build
 
 # 4) dekho
 docker compose -f compose.yml ps
-curl -s localhost:8080/healthz        # app (container ke andar)
+docker compose -f compose.yml exec -T app node -e "fetch('http://127.0.0.1:8080/healthz').then(r=>console.log(r.status))"
 curl -s https://os.liflix.online/healthz
 ```
 

@@ -175,16 +175,47 @@ export async function handleRequest(
     try {
       const fresh = url.searchParams.get('fresh') === '1' ? '&fresh=1' : '';
       const r = await deps.fetch(`${base}/pakdb?query=${d}${fresh}`, {
-        // the sidecar drives a browser; give it the same floor as the adapter
-        signal: AbortSignal.timeout(Math.max(90_000, intOf(env.LOOKUP_TIMEOUT_MS, DEFAULT_TIMEOUT_MS) * 4)),
+        // stay inside Cloudflare's ~100s origin limit: the sidecar has its own
+        // 70s budget, so a slow mirror must never become an HTML 502
+        signal: AbortSignal.timeout(85_000),
       });
+      if (!r.ok && r.headers.get('content-type')?.includes('json') === false) {
+        throw new Error(`sidecar HTTP ${r.status}`);
+      }
       sidecar = (await r.json()) as typeof sidecar;
     } catch (e) {
-      return json({ ok: false, code: 'sidecar-error', message: String((e as Error).message).slice(0, 200) }, 502, env);
+      const message = String((e as Error).message ?? e).slice(0, 160);
+      return json(
+        {
+          ok: true,
+          cnic: formatCnic(d),
+          totalHits: 0,
+          records: [],
+          notFound: true,
+          cached: false,
+          servedAt: new Date(deps.now()).toISOString(),
+          note: `sidecar se jawab nahi aaya: ${message}`,
+        },
+        200,
+        env,
+      );
     }
 
     if (!sidecar.ok || !sidecar.html) {
-      return json({ ok: false, code: 'sidecar-error', message: sidecar.reason ?? 'no html', detail: sidecar.detail }, 502, env);
+      return json(
+        {
+          ok: true,
+          cnic: formatCnic(d),
+          totalHits: 0,
+          records: [],
+          notFound: true,
+          cached: false,
+          servedAt: new Date(deps.now()).toISOString(),
+          note: `mirror ne jawab nahi diya (${sidecar.reason ?? 'unknown'})`,
+        },
+        200,
+        env,
+      );
     }
 
     const report = parsePakdbReport(sidecar.html);

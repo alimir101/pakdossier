@@ -52,8 +52,11 @@ services:
       context: .
       dockerfile: Dockerfile.obscura
     restart: unless-stopped
-    # --workers 2 matters: single-process mode failed to execute page scripts
-    command: ["serve", "--port", "9222", "--stealth", "--workers", "2"]
+    env_file:
+      - /srv/cloud/os/obscura.env
+    # --workers 2 matters: single-process mode failed to execute page scripts.
+    # --host 0.0.0.0 + the token are required to reach CDP from another container.
+    command: ["serve", "--host", "0.0.0.0", "--port", "9222", "--stealth", "--workers", "2"]
     shm_size: 512m
     networks: [internal]
 
@@ -63,10 +66,14 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile.sidecar
     restart: unless-stopped
+    env_file:
+      - /srv/cloud/os/obscura.env
     environment:
       OBSCURA_HTTP: http://obscura:9222
       PAKDB_SIDECAR_PORT: "8788"
-      PAKDB_ATTEMPTS: "3"
+      PAKDB_ATTEMPTS: "2"
+      # whole-search budget: must finish inside Cloudflare's ~100s origin limit
+      PAKDB_BUDGET_MS: "70000"
       PAKDB_CACHE_MS: "1800000"
     depends_on: [obscura]
     networks: [internal]

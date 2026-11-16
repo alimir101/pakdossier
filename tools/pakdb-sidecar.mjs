@@ -18,7 +18,10 @@ import puppeteer from 'puppeteer-core';
 
 const PORT = Number(process.env.PAKDB_SIDECAR_PORT ?? 8788);
 const CDP_HTTP = process.env.OBSCURA_HTTP ?? 'http://127.0.0.1:9222';
-const ATTEMPTS = Number(process.env.PAKDB_ATTEMPTS ?? 3);
+const CDP_TOKEN = process.env.OBSCURA_CDP_TOKEN;
+const ATTEMPTS = Number(process.env.PAKDB_ATTEMPTS ?? 2);
+/** whole-search budget: Cloudflare closes the origin at ~100s, so finish earlier */
+const BUDGET_MS = Number(process.env.PAKDB_BUDGET_MS ?? 70_000);
 const CACHE_TTL_MS = Number(process.env.PAKDB_CACHE_MS ?? 30 * 60 * 1000);
 const cache = new Map();
 
@@ -66,8 +69,16 @@ let page = null;
 
 async function ensureBrowser() {
   if (browser?.connected && page && !page.isClosed()) return;
-  const v = await (await fetch(`${CDP_HTTP}/json/version`)).json();
-  browser = await puppeteer.connect({ browserWSEndpoint: v.webSocketDebuggerUrl });
+  const headers = CDP_TOKEN ? { Authorization: `Bearer ${CDP_TOKEN}` } : {};
+  const response = await fetch(`${CDP_HTTP}/json/version`, { headers, signal: AbortSignal.timeout(10000) });
+  if (!response.ok) throw new Error(`browser discovery returned HTTP ${response.status}`);
+  const v = await response.json();
+  // obscura reports its own host/port; rewrite to the address we actually dialled
+  const endpoint = new URL(v.webSocketDebuggerUrl);
+  const origin = new URL(CDP_HTTP);
+  endpoint.hostname = origin.hostname;
+  endpoint.port = origin.port || endpoint.port;
+  browser = await puppeteer.connect({ browserWSEndpoint: endpoint.href, headers, protocolTimeout: 90_000 });
   page = await browser.newPage();
   console.log(`[sidecar] attached to ${v.Browser}`);
 }
@@ -94,7 +105,7 @@ async function mintToken(site) {
   // That event can be very late (or never arrive) while a subresource hangs, so
   // the widget silently never appears. Wait for the API, then render explicitly.
   await page
-    .waitForFunction(() => typeof window.turnstile === 'object', { timeout: 20000, polling: 250 })
+    .waitForFunction(() => typeof window.turnstile === 'object', { timeout: 12_000, polling: 250 })
     .catch(() => {});
   await page
     .evaluate(() => {
@@ -114,7 +125,7 @@ async function mintToken(site) {
       const el = document.querySelector('input[name="cf-turnstile-response"]');
       return !!(el && typeof el.value === 'string' && el.value.length > 20);
     },
-    { timeout: 45000, polling: 500 },
+    { timeout: 25_000, polling: 400 },
   );
 
   return page.$eval('input[name="cf-turnstile-response"]', (el) => el.value);
@@ -187,7 +198,13 @@ async function search(query, force = false) {
   }
 
   let lastErr = 'unknown';
+  const startedAt = Date.now();
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+    // never start an attempt we cannot finish inside the budget
+    if (Date.now() - startedAt > BUDGET_MS) {
+      lastErr = `budget ${BUDGET_MS}ms khatam (attempt ${attempt - 1} ke baad)`;
+      break;
+    }
     // alternate hosts across attempts so a dead host is skipped quickly
     const site = SITES[(attempt - 1) % SITES.length];
     try {
@@ -213,14 +230,16 @@ async function search(query, force = false) {
       return { ok: true, number: n, kind: q.kind, attempts: attempt, site, html };
     } catch (e) {
       lastErr = `${String(e?.message ?? e).slice(0, 120)} (${site})`;
-      // a dead page/connection is recoverable: force a reattach next round
-      if (/Target closed|Session closed|detached|QUIC|net::|fetch failed/i.test(lastErr)) {
-        try {
-          page = null;
-          browser = null;
-        } catch {
-          /* ignore */
-        }
+      // self-heal: a stalled widget leaves the page useless — drop it so the next
+      // attempt gets a brand-new page instead of failing forever on the same one
+      try {
+        if (page && !page.isClosed()) await page.close().catch(() => {});
+        page = null;
+      } catch {
+        /* ignore */
+      }
+      if (/Target closed|Session closed|detached|fetch failed|discovery/i.test(lastErr)) {
+        browser = null;
       }
     }
   }
@@ -272,8 +291,8 @@ const server = createServer((req, res) => {
   send(res, 404, { ok: false, reason: 'not-found', path: url.pathname });
 });
 
-server.listen(PORT, '127.0.0.1', () => {
-  console.log(`[sidecar] listening on http://127.0.0.1:${PORT}  (obscura at ${CDP_HTTP})`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`[sidecar] listening on http://0.0.0.0:${PORT}  (browser at ${CDP_HTTP})`);
   void warmup();
 });
 

@@ -201,15 +201,33 @@ describe('routes — /api/cnic (reverse: which numbers sit on a CNIC)', () => {
     expect(body.records).toEqual([]);
   });
 
-  it('502s when the sidecar itself fails', async () => {
+  it('never surfaces a slow/failed mirror as a 502 — always graceful JSON', async () => {
     const { impl } = sidecarFetch({ ok: false, reason: 'exhausted', detail: 'QUIC' });
     const r = await handleRequest(
       get(`/api/cnic?cnic=${CNIC}`),
       { PAKDB_BROWSER_URL: 'http://sidecar.test' },
       { ...deps, fetch: impl, cache: memoryCache(deps) },
     );
-    expect(r.status).toBe(502);
-    expect((await r.json()).code).toBe('sidecar-error');
+    expect(r.status).toBe(200);
+    const body = await r.json();
+    expect(body.ok).toBe(true);
+    expect(body.records).toEqual([]);
+    expect(body.note).toContain('exhausted');
+  });
+
+  it('also survives the sidecar being unreachable (timeout) with 200 JSON', async () => {
+    const impl = (async () => {
+      const e = new Error('timeout');
+      e.name = 'TimeoutError';
+      throw e;
+    }) as unknown as typeof fetch;
+    const r = await handleRequest(
+      get(`/api/cnic?cnic=${CNIC}`),
+      { PAKDB_BROWSER_URL: 'http://sidecar.test' },
+      { ...deps, fetch: impl, cache: memoryCache(deps) },
+    );
+    expect(r.status).toBe(200);
+    expect((await r.json()).note).toContain('sidecar');
   });
 });
 
