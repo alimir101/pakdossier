@@ -104,6 +104,26 @@ describe('pool — free-tier discipline', () => {
     expect(out.partial[0].reason).toBe('cooldown');
   });
 
+  it('fresh=true bypasses a cooldown, so a manual refresh really tries', async () => {
+    const { counters } = harness();
+    let called = 0;
+    const rl = fake('rl', {
+      run: async () => {
+        called++;
+        throw new AdapterError('rate-limited', 'HTTP 429');
+      },
+    });
+    await runPool(input, {}, { ...deps, counters, timeoutMs: 100, adapters: [{ adapter: rl }] });
+    expect(await counters.inCooldown('rl')).toBe(true);
+
+    await runPool(input, {}, { ...deps, counters, timeoutMs: 100, adapters: [{ adapter: rl }], fresh: true });
+    expect(called).toBe(2);
+
+    // and without fresh it stays skipped
+    await runPool(input, {}, { ...deps, counters, timeoutMs: 100, adapters: [{ adapter: rl }] });
+    expect(called).toBe(2);
+  });
+
   it('gives a slow provider its own deadline floor', async () => {
     const { counters } = harness();
     let seenTimeout = 0;
