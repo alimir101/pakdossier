@@ -3,7 +3,8 @@ import puppeteer from 'puppeteer-core';
 
 const SITE = 'https://pakistandataba.se/databases/sim.php';
 const API = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
-const v = await (await fetch('http://127.0.0.1:9222/json/version')).json();
+const CDP = process.env.OBSCURA_HTTP ?? 'http://127.0.0.1:9222';
+const v = await (await fetch(`${CDP}/json/version`)).json();
 const browser = await puppeteer.connect({ browserWSEndpoint: v.webSocketDebuggerUrl, protocolTimeout: 120000 });
 const page = await browser.newPage();
 
