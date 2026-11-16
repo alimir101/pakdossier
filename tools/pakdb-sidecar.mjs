@@ -14,7 +14,25 @@
  * one parser.
  */
 import { createServer } from 'node:http';
-import puppeteer from 'puppeteer-core';
+
+/**
+ * JUGAAD: a bot-shaped headless browser makes Cloudflare's widget overrun and
+ * then fail its interactive attempt. puppeteer-extra's stealth plugin patches the
+ * usual automation tells, which is the standard fix. Falls back to puppeteer-core
+ * when the plugin is not installed.
+ */
+let puppeteer;
+let stealthOn = false;
+try {
+  const { default: pptr } = await import('puppeteer-extra');
+  const { default: stealth } = await import('puppeteer-extra-plugin-stealth');
+  pptr.use(stealth());
+  puppeteer = pptr;
+  stealthOn = true;
+} catch {
+  puppeteer = (await import('puppeteer-core')).default;
+}
+console.log(`[sidecar] puppeteer: ${stealthOn ? 'puppeteer-extra + stealth' : 'puppeteer-core (no stealth)'}`);
 
 const PORT = Number(process.env.PAKDB_SIDECAR_PORT ?? 8788);
 const CDP_HTTP = process.env.OBSCURA_HTTP ?? 'http://127.0.0.1:9222';
@@ -115,7 +133,37 @@ async function ensureTurnstileApi() {
   return after === 'object' || after === 'function';
 }
 
-/** The widget's child frame can also arrive with an empty body: push its bundle in. */
+/**
+ * Click the widget where it actually is. The container measures 0px high, so
+ * guessed coordinates miss; the iframe's own box is the reliable target, and
+ * `frame.click('body')` is the fallback.
+ */
+async function clickWidget() {
+  const frame = page.frames().find((f) => /turnstile|challenge-platform/i.test(f.url()));
+  if (!frame) return false;
+  try {
+    const el = await frame.frameElement();
+    const box = await el.boundingBox();
+    if (box && box.width > 4) {
+      const x = box.x + Math.min(28, box.width / 3);
+      const y = box.y + box.height / 2;
+      await page.mouse.move(x - 60, y - 20);
+      await page.mouse.move(x, y, { steps: 6 });
+      await page.mouse.down();
+      await new Promise((r) => setTimeout(r, 90));
+      await page.mouse.up();
+      return true;
+    }
+  } catch {
+    /* fall through */
+  }
+  try {
+    await frame.click('body');
+    return true;
+  } catch {
+    return false;
+  }
+}
 async function pokeWidgetFrame() {
   const frame = page.frames().find((f) => /challenge-platform|turnstile\/v0/i.test(f.url()));
   if (!frame) return false;
@@ -138,18 +186,19 @@ async function mintToken(site) {
   await ensureTurnstileApi();
 
   // render explicitly (implicit render waits for a `load` event that can be late)
-  await page
+  const widgetId = await page
     .evaluate(() => {
       const el = document.querySelector('.cf-turnstile, [data-sitekey]');
-      if (!el || !window.turnstile || el.getAttribute('data-pd-rendered')) return;
+      if (!el || !window.turnstile) return null;
       try {
-        window.turnstile.render(el);
+        const id = window.turnstile.render(el);
         el.setAttribute('data-pd-rendered', '1');
+        return id ?? 'rendered';
       } catch {
-        /* implicit render may still win; the wait below covers both */
+        return null;
       }
     })
-    .catch(() => {});
+    .catch(() => null);
 
   const readToken = () =>
     page.evaluate(() => {
@@ -166,28 +215,31 @@ async function mintToken(site) {
    */
   const started = Date.now();
   let lastClick = 0;
+  let executed = false;
   while (Date.now() - started < TOKEN_WAIT_MS) {
     const tok = await readToken();
     if (tok && tok.length > 20) return tok;
 
-    if (Date.now() - started > 8000 && Date.now() - lastClick > 2500) {
+    // force the challenge once, after the passive attempt has had its chance
+    if (!executed && widgetId && Date.now() - started > 25_000) {
+      executed = true;
+      await page
+        .evaluate((id) => {
+          try {
+            window.turnstile.execute(id);
+            return true;
+          } catch {
+            return false;
+          }
+        }, widgetId)
+        .catch(() => {});
+      console.log('[sidecar] turnstile.execute() force-kiya');
+    }
+
+    if (Date.now() - started > 6000 && Date.now() - lastClick > 2500) {
       lastClick = Date.now();
-      const box = await page
-        .evaluate(() => {
-          const el = document.querySelector('.cf-turnstile, [data-sitekey]');
-          if (!el) return null;
-          const r = el.getBoundingClientRect();
-          return { x: r.x, y: r.y, w: r.width, h: r.height };
-        })
-        .catch(() => null);
-      if (box && box.w > 0) {
-        const y = box.y + (box.h > 4 ? box.h / 2 : 22);
-        for (const x of [box.x + 25, box.x + 34, box.x + box.w / 2]) {
-          await page.mouse.click(x, y).catch(() => {});
-        }
-        // the widget may live in a child frame: give that a poke too
-        await pokeWidgetFrame().catch(() => {});
-      }
+      await clickWidget().catch(() => {});
+      await pokeWidgetFrame().catch(() => {});
     }
     await new Promise((r) => setTimeout(r, 700));
   }
