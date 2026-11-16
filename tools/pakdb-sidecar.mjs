@@ -98,15 +98,44 @@ async function gotoRetry(url, tries = 3) {
   throw last;
 }
 
+const SITE_TURNSTILE_API = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
+
+/**
+ * The page's own `<script src=…turnstile…>` sometimes never fires in a headless
+ * engine, so `window.turnstile` stays undefined and the widget never mounts.
+ * Injecting it over CDP provably works (~1.4s), so do that as a fallback.
+ */
+async function ensureTurnstileApi() {
+  const t = await page.evaluate(() => typeof window.turnstile).catch(() => 'err');
+  if (t === 'object' || t === 'function') return true;
+  await page.addScriptTag({ url: SITE_TURNSTILE_API }).catch(() => {});
+  const after = await page.evaluate(() => typeof window.turnstile).catch(() => 'err');
+  return after === 'object' || after === 'function';
+}
+
+/** The widget's child frame can also arrive with an empty body: push its bundle in. */
+async function pokeWidgetFrame() {
+  const frame = page.frames().find((f) => /challenge-platform|turnstile\/v0/i.test(f.url()));
+  if (!frame) return false;
+  try {
+    const html = await (await fetch(frame.url(), { signal: AbortSignal.timeout(15000) })).text();
+    const scripts = [...html.matchAll(/<script[^>]*src=["']([^"']+)["'][^>]*>/gi)].map((m) => new URL(m[1], frame.url()).href);
+    const inline = [...html.matchAll(/<script(?![^>]*src=)[^>]*>([\s\S]*?)<\/script>/gi)]
+      .map((m) => m[1])
+      .filter((s) => s.trim().length > 50);
+    for (const url of scripts) await frame.addScriptTag({ url }).catch(() => {});
+    for (const content of inline) await frame.addScriptTag({ content }).catch(() => {});
+    return scripts.length + inline.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 async function mintToken(site) {
   await gotoRetry(site);
+  await ensureTurnstileApi();
 
-  // The Turnstile api.js renders `.cf-turnstile` divs on the window `load` event.
-  // That event can be very late (or never arrive) while a subresource hangs, so
-  // the widget silently never appears. Wait for the API, then render explicitly.
-  await page
-    .waitForFunction(() => typeof window.turnstile === 'object', { timeout: 12_000, polling: 250 })
-    .catch(() => {});
+  // render explicitly (implicit render waits for a `load` event that can be late)
   await page
     .evaluate(() => {
       const el = document.querySelector('.cf-turnstile, [data-sitekey]');
@@ -120,15 +149,26 @@ async function mintToken(site) {
     })
     .catch(() => {});
 
-  await page.waitForFunction(
-    () => {
+  const readToken = () =>
+    page.evaluate(() => {
       const el = document.querySelector('input[name="cf-turnstile-response"]');
-      return !!(el && typeof el.value === 'string' && el.value.length > 20);
-    },
-    { timeout: 25_000, polling: 400 },
-  );
+      return el && typeof el.value === 'string' ? el.value : '';
+    }).catch(() => '');
 
-  return page.$eval('input[name="cf-turnstile-response"]', (el) => el.value);
+  // two windows, with a frame poke in between: the child frame often needs help
+  for (let round = 0; round < 2; round++) {
+    const deadline = Date.now() + 12_000;
+    while (Date.now() < deadline) {
+      const tok = await readToken();
+      if (tok && tok.length > 20) return tok;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    if (round === 0) await pokeWidgetFrame();
+  }
+
+  const tok = await readToken();
+  if (!tok || tok.length <= 20) throw new Error('widget ne token nahi diya');
+  return tok;
 }
 
 /**
